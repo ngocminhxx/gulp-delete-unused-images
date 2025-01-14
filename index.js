@@ -12,16 +12,14 @@ var through2 = require('through2'),
 var PLUGIN_NAME = 'gulp-delete-unused-images';
 
 function deleteUnusedImages(options) {
-
   options = options || {};
 
-  _.defaults(options, {delete: true, log: false});
+  _.defaults(options, { delete: true, log: false });
 
   var imageNames = [];
   var usedImageNames = [];
 
   var transform = through2.obj(function (chunk, enc, callback) {
-
     var self = this;
 
     if (chunk.isNull()) {
@@ -41,34 +39,31 @@ function deleteUnusedImages(options) {
     try {
       var rl = require('readline').createInterface({
         input: fs.createReadStream(String(chunk.path)),
-        terminal: false
+        terminal: false,
       }).on('line', function (line) {
-        var filename = (line.match(/((?:((?:[^\(\\\'\"\r\n\t\f\/\s\.])+)\.(?:(png|gif|jpe?g|pdf|xml|apng|svg|mng)\b)))/gmi) || []).pop();
-        if (filename) {
-          usedImageNames.push(filename);
-        }
+        // Match src, srcset, and background-image URLs
+        const matches = [
+          ...line.matchAll(/(?:src|srcset)="([^"]+\.(png|gif|jpe?g|svg|mng))"/gi), // Matches src and srcset
+          ...line.matchAll(/url\(['"]?([^'")]+\.(png|gif|jpe?g|svg|mng))['"]?\)/gi), // Matches url(...)
+        ];
+        matches.forEach(match => usedImageNames.push(match[1]));
       }).on('close', function () {
-
         self.push(chunk);
-
         callback();
-
       });
     } catch (e) {
       console.log(e);
       callback();
     }
-
   });
 
   transform.on('finish', function () {
-
     _.mixin({
       findUsedImages: function (imageNames, usedImageNames) {
         return _.filter(imageNames, function (path) {
-          return _.includes(usedImageNames, _(path).split('/').last());
+          return _.some(usedImageNames, (used) => path.endsWith(used));
         });
-      }
+      },
     });
 
     var usedImages = _.findUsedImages(imageNames, usedImageNames);
@@ -76,8 +71,8 @@ function deleteUnusedImages(options) {
 
     if (unusedImages.length) {
       if (options.delete) {
-        del(unusedImages).then(paths => {
-            console.log('Deleted images:\n', paths.join('\n'));
+        del(unusedImages).then((paths) => {
+          console.log('Deleted images:\n', paths.join('\n'));
         });
       }
       if (options.log) {
@@ -87,7 +82,6 @@ function deleteUnusedImages(options) {
   });
 
   return transform;
-
 }
 
 module.exports = deleteUnusedImages;
